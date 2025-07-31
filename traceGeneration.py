@@ -7,7 +7,7 @@ from actor import Actor
 from log import getLog
 import qvalues
 
-log = getLog()
+log = getLog() 
 
 class Trace:
     """Stores a sequence of (state_representation, action) pairs from agent episodes"""
