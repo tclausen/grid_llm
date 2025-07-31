@@ -1,0 +1,8 @@
+*.txt
+model/out
+uv.lock
+*.obj
+*.log
+.*
+__pycache__
+**/*.pkl

@@ -7,7 +7,7 @@ gamma = 0.9
 
 def add(s, s1, a, v, actions):
     td = alpha*(v+gamma*maxQ(s1, actions))
-    #print(f"td = {td}, alpha = {alpha}, gamma = {gamma}, maxQ = {maxQ(s1, actions)}")
+    #print(f"td = {td}, alpha = {alpha}, gamma = {gamma}, maxQ = {maxQ(s1, actions)}, {s}, {s1}")
     if (s, a) not in qvalues:
         qvalues[(s, a)] = td
     else:
@@ -34,12 +34,11 @@ def getBestAction(s, actions):
     unExplored = []
     for a in actions:
         if (s, a) not in qvalues:
-            print(f"{s} {a} unexplored")
+            #print(f"{s} {a} unexplored")
             unExplored.append(a)
             continue
         v = qvalues[(s, a)]
         if v > bestValue:
-            print(f"{s} {a} {v}")
             bestValue = v
             bestAction = a
     # Unexplored actions have a 0 reward by default

@@ -5,16 +5,17 @@ import world
 import state
 
 actions = ["u", "d", "l", "r"]
-epsilon = 0.05
+epsilon = 0.1
 
 class Actor:
     def __init__(self, w, state):
         self.world = w
+        w.setValue(state.position(), "A")
         self.state = state
+        self.stateRep = w.look(state)
         self.actions = w.actionSpace()
         self.totalReward = 0
         self.totalSteps = 0
-        w.setValue(state.position(), "A")
 
     def randomAction(self):
         #print("# Random action")
@@ -25,7 +26,7 @@ class Actor:
             return self.randomAction()
         a = qvalues.getBestAction(s, actions)
         if a:
-            print(f"# Best action: {a}")
+            #print(f"# Best action: {a}")
             return a
         return self.randomAction()
 
@@ -33,33 +34,34 @@ class Actor:
         n = 0
         while True:
             n += 1
-            a = self.getBestActionEpsilonGreedy(s)
-            s1, r = self.step(self.state, a)
-            print(f"# Step {n}: {self.state}, action: {a} -> {s1}, reward: {r}")
-            qvalues.add(self.state, s1, a, r, self.actions)
+            a = self.getBestActionEpsilonGreedy(self.stateRep)
+            prevState = self.state
+            prevStateRep = self.stateRep
+            r = self.step(self.state, a)
+            print(f"# Step {n}: {prevState}, action: {a} -> {self.state}, reward: {r}")
+            qvalues.add(prevStateRep, self.stateRep, a, r, self.actions)
             if n >= steps:
                 break
-            self.state = s1
 
     def avgReward(self):
         return self.totalReward / self.totalSteps
 
     def step(self, s, a):
-        s1, r = self.world.step(s, a)
+        self.state, r = self.world.step(self.state, a)
+        self.stateRep = self.world.look(self.state)
         self.totalReward += r
         self.totalSteps += 1
-        return s1, r
+        return r
 
     def randomWalk(self, steps=10):
         n = 0
         while True:
             n += 1
             a = self.randomAction()
-            s1, r = self.step(self.state, a)
+            r = self.step(self.state, a)
             #print(f"# Step {n}: {s}, action: {a} -> {s1}, reward: {r}, {n}")
             if n >= steps:
                 break
-            self.state = s1
 
 if __name__ == "__main__":
     w = world.WorldT1()
@@ -72,6 +74,6 @@ if __name__ == "__main__":
     w = world.WorldT1()
     s = state.State([0, 0])
     a = Actor(w, s)
-    a.bestActionWalk(10)
+    a.bestActionWalk(10000)
     print(qvalues.qvalues)
     print("Avg reward:", a.avgReward(), a.totalReward, a.totalSteps)

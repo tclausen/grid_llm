@@ -142,7 +142,7 @@ class World:
             for i in range(-radius, radius+1):
                 r.append(self.value(p + Point(i, j)))
             #r.append("|")
-        return ".".join(r)
+        return "".join(r)
         
 
 class WorldT1(World):
