@@ -10,7 +10,7 @@ epsilon = 0.1
 class Actor:
     def __init__(self, w, state):
         self.world = w
-        w.setValue(state.position(), "A")
+        w.addAgent(state.position())
         self.state = state
         self.stateRep = w.look(state)
         self.actions = w.actionSpace()

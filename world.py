@@ -29,6 +29,9 @@ class World:
             p = Point(x, y)
         return p
 
+    def addAgent(self, p):
+        self.setValue(p, "A")
+
     def reset(self):
         log.info("Reset world")
 
@@ -148,6 +151,10 @@ class World:
 class WorldT1(World):
     def __init__(self):
         super().__init__()
+
+class WorldComplex(World):
+    def __init__(self):
+        super().__init__("complex")
 
 if __name__ == "__main__":
     w = WorldT1()

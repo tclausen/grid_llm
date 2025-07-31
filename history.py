@@ -5,7 +5,6 @@ import pickle
 
 from state import *
 from world import *
-from buildTraces import *
 
 class Node:
     def __init__(self, t=None):
