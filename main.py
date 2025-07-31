@@ -41,29 +41,42 @@ def testComplexWorld():
     return w
 
 def testTraceGeneration():
-    print("\n=== Testing Trace Generation ===")
+    print("\n=== Testing Trace Generation with Actor ===")
     world = WorldComplex()
     
     # Generate a single trace
     start_state = State([5, 5])
-    trace = generateTrace(world, start_state, 8)
+    trace, actor = generateTrace(world, start_state, 8)
     
     print("Generated single trace:")
     for i, (state_rep, action) in enumerate(trace.getSteps()):
         print(f"Step {i}: state='{state_rep}' action='{action}'")
     
     print(f"\nTrace summary: {trace}")
+    print(f"Actor summary: total reward={actor.totalReward}, avg reward={actor.avgReward():.3f}")
     
     # Generate multiple traces
     print("\n=== Generating Multiple Traces ===")
-    traces = generateMultipleTraces(world, 3, 5)
+    trace_actor_pairs = generateMultipleTraces(world, 3, 5)
     
-    for i, trace in enumerate(traces):
-        print(f"\nTrace {i+1}: {trace}")
+    for i, (trace, actor) in enumerate(trace_actor_pairs):
+        print(f"\nTrace {i+1}: {trace} (reward: {actor.totalReward})")
         for j, (state_rep, action) in enumerate(trace.getSteps()):
             print(f"  Step {j}: '{state_rep}' -> '{action}'")
     
-    return traces
+    # Test epsilon-greedy policy
+    print("\n=== Testing Epsilon-Greedy Policy ===")
+    trace_eg, actor_eg = generateTrace(world, State([8, 8]), 5, policy="epsilon_greedy")
+    print(f"Epsilon-greedy trace: {trace_eg} (reward: {actor_eg.totalReward})")
+    
+    # Test LLM formatting
+    print("\n=== Testing LLM Formatting ===")
+    print("LLM formatted trace:")
+    llm_format = trace.formatForLLM()
+    for line in llm_format:
+        print(line)
+    
+    return trace_actor_pairs
 
 if __name__ == "__main__":
     # Test the complex world first

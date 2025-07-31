@@ -3,7 +3,9 @@
 import random
 from world import WorldComplex
 from state import State
+from actor import Actor
 from log import getLog
+import qvalues
 
 log = getLog()
 
@@ -30,60 +32,74 @@ class Trace:
         
     def __repr__(self):
         return f"Trace({self.steps})"
+    
+    def formatForLLM(self):
+        """Format trace as LLM training data: state|action>nextstate"""
+        formatted_lines = []
+        
+        for i in range(len(self.steps) - 1):
+            current_state, action = self.steps[i]
+            next_state, _ = self.steps[i + 1]
+            
+            # Format: state|action>nextstate
+            line = f"{current_state}|{action}>{next_state}"
+            formatted_lines.append(line)
+        
+        return formatted_lines
+    
+    def formatForLLMAsString(self):
+        """Format trace as LLM training data and return as single string"""
+        return "\n".join(self.formatForLLM())
 
 def generateTrace(world, start_state, num_steps, policy="random"):
     """
-    Generate a trace of (state, action, next_state) transitions
+    Generate a trace of (state, action, next_state) transitions using Actor class
     
     Args:
         world: The world environment
         start_state: Initial state for the agent
         num_steps: Number of steps to take
-        policy: Action selection policy ("random" for now)
+        policy: Action selection policy ("random", "epsilon_greedy")
     
     Returns:
         Trace object containing the sequence of (state_representation, action) pairs
     """
     trace = Trace()
-    current_state = start_state.copy()
-    world.addAgent(current_state.position())
     
-    log.info(f"Generating trace with {num_steps} steps from position {current_state.position()}")
+    # Create an Actor instance to handle stepping and action selection
+    actor = Actor(world, start_state.copy())
+    
+    log.info(f"Generating trace with {num_steps} steps from position {actor.state.position()}")
     
     for step in range(num_steps):
         # Get current state representation (what the agent "sees")
-        state_representation = world.look(current_state)
+        state_representation = actor.stateRep
         
-        # Get available actions at current position
-        available_actions = world.actionSpaceInPosition(current_state.position())
-        
-        if not available_actions:
-            log.warning(f"No available actions at position {current_state.position()}")
-            break
-            
-        # Select action based on policy
+        # Select action based on policy using Actor methods
         if policy == "random":
-            action = random.choice(available_actions)
+            action = actor.randomAction()
+        elif policy == "epsilon_greedy":
+            action = actor.getBestActionEpsilonGreedy(state_representation)
         else:
             raise ValueError(f"Unknown policy: {policy}")
             
         # Add step to trace (state_representation, action)
         trace.addStep(state_representation, action)
         
-        # Execute action to get next state
-        next_state, reward = world.step(current_state, action)
-        current_state = next_state
+        # Execute action using Actor's step method
+        prevStateRep = actor.stateRep
+        reward = actor.step(actor.state, action)
+
+        qvalues.add(prevStateRep, actor.stateRep, action, reward, actor.actions)
         
         log.debug(f"Step {step}: state={state_representation}, action={action}, reward={reward}")
-        world.printAll()
-        print(world.look(current_state), action)
     
-    log.info(f"Generated trace with {trace.length()} steps")
-    return trace
+    log.info(f"Generated trace with {trace.length()} steps, total reward: {actor.totalReward}")
+    return trace, actor
 
 def generateMultipleTraces(world, num_traces, steps_per_trace, policy="random"):
     """
-    Generate multiple traces from random starting positions
+    Generate multiple traces from random starting positions using Actor class
     
     Args:
         world: The world environment
@@ -92,9 +108,9 @@ def generateMultipleTraces(world, num_traces, steps_per_trace, policy="random"):
         policy: Action selection policy
         
     Returns:
-        List of Trace objects
+        List of (Trace, Actor) tuples
     """
-    traces = []
+    trace_actor_pairs = []
     
     for i in range(num_traces):
         # Get a random free starting position
@@ -103,21 +119,25 @@ def generateMultipleTraces(world, num_traces, steps_per_trace, policy="random"):
         
         log.info(f"Generating trace {i+1}/{num_traces} from position {start_pos}")
         
-        trace = generateTrace(world, start_state, steps_per_trace, policy)
-        traces.append(trace)
+        trace, actor = generateTrace(world, start_state, steps_per_trace, policy)
+        trace_actor_pairs.append((trace, actor))
     
-    return traces
+    return trace_actor_pairs
 
 if __name__ == "__main__":
-    # Test trace generation
+    # Test trace generation with Actor
     world = WorldComplex()
     
     # Generate a single trace
     start_state = State([5, 5])
-    trace = generateTrace(world, start_state, 10)
+    trace, actor = generateTrace(world, start_state, 10, "epsilon_greedy")
     
     print("Generated trace:")
     for i, (state_rep, action) in enumerate(trace.getSteps()):
         print(f"Step {i}: state='{state_rep}' action='{action}'")
     
     print(f"\nTrace summary: {trace}")
+    print(f"Actor summary: total reward={actor.totalReward}, avg reward={actor.avgReward():.3f}")
+    print(qvalues.qvalues)
+    print("Avg reward:", actor.avgReward(), actor.totalReward, actor.totalSteps)
+    print(trace)
