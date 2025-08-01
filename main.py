@@ -153,6 +153,15 @@ if __name__ == "__main__":
     # Test tokenized trace generation and dataset creation
     tokenized_data, train_dataset, val_dataset = testTokenizedTraceGeneration()
     
+    # Test training infrastructure (quick test)
+    print("\n=== Quick Training Infrastructure Test ===")
+    try:
+        from test_training import test_model_size_scaling
+        test_model_size_scaling()
+        print("✓ Training infrastructure test passed")
+    except Exception as e:
+        print(f"✗ Training infrastructure test failed: {e}")
+    
     exit(0)
 
     episodes = randomWalkEpisodes(w, s, 5, 2)
