@@ -3,7 +3,9 @@
 from history import *
 from world import WorldComplex
 from state import State
-from traceGeneration import generateTrace, generateMultipleTraces
+from traceGeneration import generateTrace, generateMultipleTraces, generateTokenizedTraces
+from tokenizer import CharTokenizer
+from dataset import create_train_val_datasets, create_dataloaders
 
 log = getLog()
 
@@ -78,12 +80,78 @@ def testTraceGeneration():
     
     return trace_actor_pairs
 
+def testTokenizedTraceGeneration():
+    print("\n=== Testing Tokenized Trace Generation ===")
+    world = WorldComplex()
+    tokenizer = CharTokenizer()
+    
+    # Generate tokenized traces
+    tokenized_data = generateTokenizedTraces(
+        world, 
+        num_traces=5, 
+        steps_per_trace=8, 
+        policy="random",
+        tokenizer=tokenizer,
+        max_length=200
+    )
+    
+    print(f"Generated {len(tokenized_data['tokenized_sequences'])} tokenized sequences")
+    
+    # Show validation results
+    valid_count = sum(1 for valid, _ in tokenized_data['validation_results'] if valid)
+    print(f"Vocabulary compliance: {valid_count}/{len(tokenized_data['validation_results'])} traces valid")
+    
+    # Show sample tokenized sequence
+    sample_trace = tokenized_data['traces'][0]
+    sample_tokens = tokenized_data['tokenized_sequences'][0]
+    
+    print(f"\nSample trace ({sample_trace.length()} steps):")
+    for i, (state, action) in enumerate(sample_trace.getSteps()[:3]):  # First 3 steps
+        print(f"  Step {i}: '{state}' -> '{action}'")
+    
+    print(f"\nSample LLM format:")
+    llm_formatted = sample_trace.formatForLLM()
+    for line in llm_formatted[:2]:  # First 2 lines
+        print(f"  {line}")
+    
+    print(f"\nSample tokenized sequence (length {len(sample_tokens)}):")
+    print(f"  Tokens: {sample_tokens[:30]}...")  # First 30 tokens
+    print(f"  Decoded: '{tokenizer.decode(sample_tokens[:30])}...'")
+    
+    # Test dataset creation
+    print("\n=== Testing Dataset Creation ===")
+    train_dataset, val_dataset = create_train_val_datasets(
+        tokenized_data,
+        train_ratio=0.8,
+        block_size=128,
+        tokenizer=tokenizer
+    )
+    
+    print(f"Train dataset size: {len(train_dataset)}")
+    print(f"Val dataset size: {len(val_dataset) if val_dataset else 0}")
+    
+    # Test data loaders
+    train_loader, val_loader = create_dataloaders(train_dataset, val_dataset, batch_size=2)
+    
+    # Show a batch
+    for batch in train_loader:
+        print(f"Batch input shape: {batch['input_ids'].shape}")
+        print(f"Batch labels shape: {batch['labels'].shape}")
+        print(f"Sample input tokens: {batch['input_ids'][0][:15]}")  # First 15 tokens of first sample
+        print(f"Sample label tokens: {batch['labels'][0][:15]}")
+        break
+    
+    return tokenized_data, train_dataset, val_dataset
+
 if __name__ == "__main__":
     # Test the complex world first
     w = testComplexWorld()
     
     # Test trace generation
     traces = testTraceGeneration()
+    
+    # Test tokenized trace generation and dataset creation
+    tokenized_data, train_dataset, val_dataset = testTokenizedTraceGeneration()
     
     exit(0)
 

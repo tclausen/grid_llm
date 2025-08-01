@@ -6,6 +6,7 @@ from state import State
 from actor import Actor
 from log import getLog
 import qvalues
+from tokenizer import CharTokenizer
 
 log = getLog()
 
@@ -50,6 +51,84 @@ class Trace:
     def formatForLLMAsString(self):
         """Format trace as LLM training data and return as single string"""
         return "\n".join(self.formatForLLM())
+    
+    def formatForLLMTokenized(self, tokenizer=None):
+        """
+        Format trace as tokenized sequences for LLM training
+        
+        Args:
+            tokenizer (CharTokenizer, optional): Tokenizer to use. Creates new one if None.
+            
+        Returns:
+            List[List[int]]: List of tokenized sequences, one per transition
+        """
+        if tokenizer is None:
+            tokenizer = CharTokenizer()
+            
+        formatted_sequences = []
+        llm_formatted = self.formatForLLM()
+        
+        for line in llm_formatted:
+            # Tokenize each line with special tokens
+            tokens = tokenizer.encode_with_special_tokens(line, add_bos=True, add_eos=True)
+            formatted_sequences.append(tokens)
+            
+        return formatted_sequences
+    
+    def formatForLLMTokenizedFlat(self, tokenizer=None, max_length=None):
+        """
+        Format trace as a single flat sequence of tokens for training
+        
+        Args:
+            tokenizer (CharTokenizer, optional): Tokenizer to use
+            max_length (int, optional): Maximum sequence length (truncate or pad)
+            
+        Returns:
+            List[int]: Single flat sequence of tokens
+        """
+        if tokenizer is None:
+            tokenizer = CharTokenizer()
+            
+        # Join all formatted lines with newlines
+        full_text = self.formatForLLMAsString()
+        
+        # Tokenize the full sequence
+        tokens = tokenizer.encode_with_special_tokens(full_text, add_bos=True, add_eos=True)
+        
+        # Apply max_length if specified
+        if max_length is not None:
+            if len(tokens) > max_length:
+                tokens = tokens[:max_length]
+            else:
+                tokens = tokenizer.pad_sequence(tokens, max_length)
+                
+        return tokens
+    
+    def validateVocabulary(self, tokenizer=None):
+        """
+        Validate that all characters in the trace are in the tokenizer vocabulary
+        
+        Args:
+            tokenizer (CharTokenizer, optional): Tokenizer to validate against
+            
+        Returns:
+            tuple: (is_valid: bool, unknown_chars: set)
+        """
+        if tokenizer is None:
+            tokenizer = CharTokenizer()
+            
+        vocab = tokenizer.get_vocab()
+        unknown_chars = set()
+        
+        # Check all characters in all steps
+        for state_rep, action in self.steps:
+            full_step = f"{state_rep}|{action}"
+            for char in full_step:
+                if char not in vocab:
+                    unknown_chars.add(char)
+        
+        is_valid = len(unknown_chars) == 0
+        return is_valid, unknown_chars
 
 def generateTrace(world, start_state, num_steps, policy="random"):
     """
@@ -123,6 +202,54 @@ def generateMultipleTraces(world, num_traces, steps_per_trace, policy="random"):
         trace_actor_pairs.append((trace, actor))
     
     return trace_actor_pairs
+
+def generateTokenizedTraces(world, num_traces, steps_per_trace, policy="random", tokenizer=None, max_length=None):
+    """
+    Generate multiple tokenized traces ready for LLM training
+    
+    Args:
+        world: The world environment
+        num_traces: Number of traces to generate
+        steps_per_trace: Number of steps per trace
+        policy: Action selection policy
+        tokenizer: CharTokenizer instance to use
+        max_length: Maximum sequence length for padding/truncation
+        
+    Returns:
+        dict: Contains 'traces', 'actors', 'tokenized_sequences', 'validation_results'
+    """
+    if tokenizer is None:
+        tokenizer = CharTokenizer()
+    
+    # Generate regular traces
+    trace_actor_pairs = generateMultipleTraces(world, num_traces, steps_per_trace, policy)
+    
+    # Process each trace for tokenization
+    tokenized_sequences = []
+    validation_results = []
+    
+    for trace, actor in trace_actor_pairs:
+        # Validate vocabulary compliance
+        is_valid, unknown_chars = trace.validateVocabulary(tokenizer)
+        validation_results.append((is_valid, unknown_chars))
+        
+        if not is_valid:
+            log.warning(f"Trace contains unknown characters: {unknown_chars}")
+        
+        # Generate tokenized sequence
+        tokenized_seq = trace.formatForLLMTokenizedFlat(tokenizer, max_length)
+        tokenized_sequences.append(tokenized_seq)
+    
+    log.info(f"Generated {len(tokenized_sequences)} tokenized traces")
+    log.info(f"Vocabulary compliance: {sum(1 for valid, _ in validation_results if valid)}/{len(validation_results)} traces valid")
+    
+    return {
+        'traces': [trace for trace, _ in trace_actor_pairs],
+        'actors': [actor for _, actor in trace_actor_pairs],
+        'tokenized_sequences': tokenized_sequences,
+        'validation_results': validation_results,
+        'tokenizer': tokenizer
+    }
 
 if __name__ == "__main__":
     # Test trace generation with Actor
